@@ -21,7 +21,7 @@ services:
       target: api
     container_name: notificaciones-api
     ports:
-      - "5000:5000"
+      - "8120:8120"
     environment:
       - ASPNETCORE_ENVIRONMENT=Development
       - RabbitMq__Host=rabbitmq

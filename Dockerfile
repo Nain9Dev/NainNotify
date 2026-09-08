@@ -31,7 +31,7 @@ ENTRYPOINT ["dotnet", "Notificaciones.Worker.dll"]
 # Stage 5: API Runtime Target
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS api
 WORKDIR /app
-EXPOSE 5000
-ENV ASPNETCORE_URLS=http://+:5000
+EXPOSE 8120
+ENV ASPNETCORE_URLS=http://+:8120
 COPY --from=publish-api /app/publish-api .
 ENTRYPOINT ["dotnet", "Notificaciones.Api.dll"]
