@@ -29,7 +29,7 @@ public sealed class InMemoryNotificationTelemetryStore : INotificationTelemetryS
     private readonly int[] _throughputBuckets = new int[ThroughputWindowSeconds];
     private readonly long[] _throughputStamps = new long[ThroughputWindowSeconds];
 
-    private readonly DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
+    private readonly DateTimeOffset _startedAt;
     private readonly TimeProvider _timeProvider;
 
     private long _accepted;
@@ -42,6 +42,10 @@ public sealed class InMemoryNotificationTelemetryStore : INotificationTelemetryS
     public InMemoryNotificationTelemetryStore(TimeProvider timeProvider)
     {
         _timeProvider = timeProvider;
+
+        // Uptime is measured against the injected clock, never against the wall clock: mixing the
+        // two would make the reading meaningless wherever the provider is substituted.
+        _startedAt = timeProvider.GetUtcNow();
     }
 
     public void Record(NotificationLifecycleEvent lifecycleEvent)

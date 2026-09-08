@@ -10,8 +10,15 @@ public static class PrivacyMasker
     private const int VisiblePrefixLength = 2;
 
     /// <summary>
+    /// Fixed width of the redacted segment. A mask proportional to the original would leak the
+    /// length of the address, which is exactly the kind of detail a public dashboard must not
+    /// disclose.
+    /// </summary>
+    private const int MaskedSegmentLength = 6;
+
+    /// <summary>
     /// Converts an address into a partially redacted form, keeping just enough characters
-    /// to correlate it visually with the original: "alberto@naindev.com" becomes "al*****@naindev.com".
+    /// to correlate it visually with the original: "alberto@naindev.com" becomes "al******@naindev.com".
     /// </summary>
     public static string MaskEmail(string? value)
     {
@@ -36,12 +43,14 @@ public static class PrivacyMasker
 
     private static string Redact(string value)
     {
+        var mask = new string('*', MaskedSegmentLength);
+
+        // Too short to show a prefix without revealing the whole value: hide it entirely.
         if (value.Length <= VisiblePrefixLength)
         {
-            return new string('*', value.Length);
+            return mask;
         }
 
-        var hiddenLength = Math.Min(value.Length - VisiblePrefixLength, 6);
-        return string.Concat(value.AsSpan(0, VisiblePrefixLength), new string('*', hiddenLength));
+        return string.Concat(value.AsSpan(0, VisiblePrefixLength), mask);
     }
 }
