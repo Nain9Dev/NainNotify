@@ -1,56 +1,147 @@
-# Microservicio de Notificaciones (NainDev)
+# NainNotify — Asynchronous Cloud Notification Gateway
 
-![.NET 10](https://img.shields.io/badge/.NET-10.0-blueviolet)
-![MassTransit](https://img.shields.io/badge/MassTransit-8.3.4-blue)
-![RabbitMQ](https://img.shields.io/badge/RabbitMQ-Message%20Broker-ff6600)
-
-Un ecosistema de despacho asíncrono de correos diseñado con **Clean Architecture** y **Domain-Driven Design**. Separa completamente el *Gateway HTTP* del *Worker* de procesamiento para garantizar una latencia inferior a 50ms en la ingesta, incluso con caídas del proveedor SMTP (Resend/Mailtrap).
-
-Este repositorio aplica el flujo **Spec-Driven Development (SDD)**: todo cambio nace en la documentación (`docs/` y `specs/`) antes que en el código.
+NainNotify is an event-driven notification gateway and worker engine built with .NET 10, Clean Architecture, and MassTransit. It decouples high-throughput HTTP ingestion from background processing, email rendering (responsive HTML with VML Outlook bulletproofing), and delivery provider execution, while streaming end-to-end domain lifecycle events directly to a reactive Vue 3 + TypeScript telemetry client via Server-Sent Events (SSE).
 
 ---
 
-## ⚡ 1-Click Demo (Docker)
+## Architecture Overview
 
-Levanta la arquitectura distribuida (Gateway + Worker + RabbitMQ) en tu máquina sin instalar nada más que Docker:
+```
+                                      +------------------------------------+
+                                      |      Vue 3 + TypeScript Client     |
+                                      |      (Port 5378 / notify.naindev)  |
+                                      +-----------------+------------------+
+                                                        |
+                                          HTTP POST     |   Server-Sent Events (SSE)
+                                          (Ingestion)   |   (Real-time telemetry)
+                                                        v
++-------------------------------------------------------------------------------------------------+
+| ASP.NET Core API Gateway (Port 8120)                                                            |
+|                                                                                                 |
+|   - Rate Limiting (Fixed window per IP)                                                         |
+|   - Honeypot Anti-Spam Gate (Silent drop on populated trap field)                              |
+|   - PrivacyMasker (Zero-PII leakage: masks email addresses before telemetry ingestion)          |
+|   - Sandbox Recipient Guard (Enforces internal test mailbox redirection for public demos)       |
+|   - OpenAPI 3.0 + Scalar Interactive Documentation (/docs)                                      |
++-------------------------------------------------+-----------------------------------------------+
+                                                  |
+                                                  v  MassTransit Ingestion
++-------------------------------------------------------------------------------------------------+
+| Event Bus Transport (Dual-Mode: In-Memory Bus or Distributed RabbitMQ Cluster)                  |
+|                                                                                                 |
+|   - NotificationEvent Exchange -> Worker Consumer Queue                                         |
+|   - NotificationLifecycleEvent Broadcast -> Telemetry Consumer & SSE Hub                        |
++-------------------------------------------------+-----------------------------------------------+
+                                                  |
+                                                  v  Concurrent Processing
++-------------------------------------------------------------------------------------------------+
+| Background Worker Engine                                                                        |
+|                                                                                                 |
+|   - Message Deserialization & Domain Event Validation                                           |
+|   - EmailTemplateEngine (VML-bulletproof HTML & RFC 2822 Plain Text generation)                 |
+|   - SMTP Relay Dispatcher & Delivery Simulation Adapter                                         |
+|   - Lifecycle Telemetry Publisher (Accepted -> Queued -> Received -> Rendered -> Dispatched)   |
++-------------------------------------------------------------------------------------------------+
+```
+
+---
+
+## Port Governance
+
+All listening ports are allocated deterministically in accordance with `dev-ports.json`:
+
+| Service / Component | Protocol / Transport | Port | URL / Path |
+|:---|:---|:---|:---|
+| **NainNotify Client (Vue 3)** | HTTP (Vite Dev / Preview) | `5378` | `http://localhost:5378` |
+| **API Gateway** | HTTP (ASP.NET Core) | `8120` | `http://localhost:8120` |
+| **Scalar Interactive API Docs** | HTTP (OpenAPI 3.0) | `8120` | `http://localhost:8120/docs` |
+| **Swagger UI** | HTTP | `8120` | `http://localhost:8120/swagger` |
+| **SSE Telemetry Stream** | HTTP EventSource | `8120` | `http://localhost:8120/api/v1/Notifications/stream` |
+| **Health Check & Diagnostics** | HTTP | `8120` | `http://localhost:8120/api/v1/Notifications/health` |
+| **RabbitMQ Management** | HTTP (Docker Compose) | `15672` | `http://localhost:15672` |
+
+---
+
+## 60-Second Quick Start
+
+### 1. Run the .NET API Gateway & Worker
+
+By default, the gateway runs in zero-dependency in-memory mode, requiring no external databases or message brokers:
+
+```bash
+dotnet run --project src/Notificaciones.Api
+```
+
+The gateway listens on `http://localhost:8120`.
+
+### 2. Run the Showcase Frontend Client
+
+In a separate terminal:
+
+```bash
+cd Notificaciones.Client
+npm install
+npm run dev
+```
+
+Open `http://localhost:5378` to launch the reactive glassmorphism console.
+
+### 3. Run with Distributed RabbitMQ (Docker)
+
+To run the distributed multi-container topology (API Gateway, Worker, and RabbitMQ):
 
 ```bash
 docker-compose up -d --build
 ```
 
-- 📡 **Consola y Swagger UI**: [http://localhost:8120](http://localhost:8120) · [/swagger](http://localhost:8120/swagger)
-- 🐇 **RabbitMQ Admin**: [http://localhost:15672](http://localhost:15672) *(guest / guest)*
-- 📜 **Logs en vivo**: `docker logs -f notificaciones-worker`
-
-> **Puerto asignado: 8120.** Fijado en `launchSettings.json`, `Dockerfile` y
-> `docker-compose.yml` segun el registro `D:\Development\PORTS.md`, para no colisionar con
-> el resto de proyectos locales. Detalle en [`docs/60-runbook.md`](docs/60-runbook.md).
-
-Haz un `POST` al endpoint `/demo` y observa cómo el Worker encola y procesa la plantilla en milisegundos de forma transparente.
-
 ---
 
-## 🏛️ Diseño y Patrones Aplicados
+## Verification & Testing Matrix
 
-El ecosistema implementa separación física y lógica extrema:
-
-1. **Inmutabilidad y Eventos**: `Notificaciones.Domain` define enumeraciones y `NotificationLifecycleEvent` sin ninguna dependencia a librerías externas.
-2. **Motor de Plantillas Resiliente**: Generación de correos Multipart (HTML + Texto) con blindaje VML para clientes difíciles como Outlook.
-3. **Privacidad por Diseño**: `PrivacyMasker` asegura que ningún PII (Personal Identifiable Information) se filtre a los logs del clúster.
-4. **Modo Híbrido**: Puede correr entero en 1 solo proceso (`UseInMemoryTransport`) o escalar horizontalmente con múltiples workers atacando RabbitMQ.
-
----
-
-## 🧪 Verificación
+Run the automated test suite across all architectural layers:
 
 ```bash
+# Execute unit and integration tests (78 tests total)
 dotnet test MicroservicioNotificaciones.sln
+
+# Type-check and build the frontend client
+cd Notificaciones.Client
+npm run build
 ```
 
-78 pruebas, sin dependencias externas. Los tests de integración levantan la aplicación real
-sobre el transporte en memoria y cubren el pipeline completo de cinco etapas, el sandbox de
-destinatarios, el rate limiting, el honeypot antispam y el servido de la consola. Los
-unitarios fijan el escapado de HTML de las plantillas, el enmascarado de direcciones y la
-aritmética de la proyección de telemetría.
+### Test Suite Composition
 
-> **Toda la documentación arquitectónica profunda reside en la carpeta `docs/`.**
+| Test Layer | Framework | Count | Scope |
+|:---|:---|:---|:---|
+| **Notificaciones.UnitTests** | xUnit | 55 | `PrivacyMasker`, `EmailTemplateEngine` (HTML escaping, VML bulletproofing), and `InMemoryNotificationTelemetryStore` arithmetic. |
+| **Notificaciones.IntegrationTests** | xUnit + WebApplicationFactory | 23 | In-memory MassTransit bus, end-to-end 5-stage lifecycle transitions, sandbox recipient redirection, rate limiter policies, honeypot anti-spam, and SSE streaming. |
+| **Notificaciones.Client** | vue-tsc + Vite | 1 | TypeScript strict template verification, contract alignment, production bundle generation. |
+
+---
+
+## Key Design Patterns & Guarantees
+
+1. **Zero-PII Telemetry Leakage (`PrivacyMasker`)**: All recipient addresses entering public telemetry streams and event stores are masked at the edge (e.g., `e*******r@c*********p.com`).
+2. **Honeypot Anti-Spam Gate**: Automated bots completing hidden input fields are met with standard `202 Accepted` responses to prevent detection, while their payloads are dropped before enqueuing.
+3. **Decoupled Server-Sent Events (SSE)**: The API Gateway maintains bounded broadcast channels with keepalive heartbeats, broadcasting state changes without poll overhead.
+4. **VML Bulletproof Email Layouts**: HTML email generation utilizes Vector Markup Language fallbacks, ensuring correct multi-column rendering across Microsoft Outlook desktop and web clients.
+
+---
+
+## Repository Structure
+
+```
+.
+├── src/
+│   ├── Notificaciones.Api/             # ASP.NET Core gateway, rate-limiting, SSE broadcast
+│   ├── Notificaciones.Application/     # MassTransit consumers, email template rendering
+│   ├── Notificaciones.Domain/          # Core events, NotificationLifecycleEvent contracts
+│   ├── Notificaciones.Infrastructure/  # Smtp client, configuration loaders, serialization
+│   └── Notificaciones.Worker/          # Standalone background worker entry point
+├── Notificaciones.Client/              # Decoupled Vue 3 + TypeScript showcase client (port 5378)
+├── tests/
+│   ├── Notificaciones.UnitTests/       # 55 unit tests
+│   └── Notificaciones.IntegrationTests/# 23 integration tests
+├── docs/                               # Architecture decisions (ADRs), changelog, traceability
+└── specs/                              # Spec-Driven Development specifications and task plans
+```

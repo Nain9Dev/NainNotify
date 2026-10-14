@@ -1,4 +1,4 @@
-﻿using System.Net;
+using System.Net;
 using System.Threading.RateLimiting;
 using MassTransit;
 using Microsoft.AspNetCore.HttpOverrides;
@@ -57,7 +57,7 @@ builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "NainDev Notification Cloud API",
+        Title = "NainNotify — Cloud Notification Gateway API",
         Version = "v1",
         Description = "REST gateway for decoupled, asynchronous notification processing with RabbitMQ and .NET 10. " +
                       "Ships a live operations console at the site root."
@@ -84,7 +84,14 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("NainDevCorsPolicy", policy =>
     {
-        policy.WithOrigins("https://www.naindev.com", "https://naindev.com", "http://localhost:3000", "http://localhost:5173")
+        policy.WithOrigins(
+            "https://www.naindev.com",
+            "https://naindev.com",
+            "https://notify.naindev.com",
+            "http://localhost:3000",
+            "http://localhost:5173",
+            "http://localhost:5378",
+            "http://127.0.0.1:5378")
               .AllowAnyMethod()
               .AllowAnyHeader()
               .AllowCredentials();
@@ -213,9 +220,30 @@ if (forwardedSettings.Enabled)
 app.UseSwagger();
 app.UseSwaggerUI(c =>
 {
-    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NainDev Notification API v1");
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "NainNotify API v1");
     c.RoutePrefix = "swagger";
 });
+
+app.MapGet("/docs", () => Results.Content("""
+    <!doctype html>
+    <html>
+      <head>
+        <title>NainNotify API Reference</title>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <style>
+          body { margin: 0; background-color: #0b0f19; }
+        </style>
+      </head>
+      <body>
+        <script
+          id="api-reference"
+          data-url="/swagger/v1/swagger.json"
+          data-configuration='{"theme": "deepSpace"}'
+          src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+      </body>
+    </html>
+    """, "text/html")).ExcludeFromDescription();
 
 // Serve the operations console from wwwroot at the site root.
 app.UseDefaultFiles();
