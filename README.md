@@ -1,5 +1,11 @@
 # NainNotify — Asynchronous Cloud Notification Gateway
 
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-notify.naindev.com-38bdf8?style=flat-square&logo=google-chrome&logoColor=white)](https://notify.naindev.com/)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
+[![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6)](https://www.typescriptlang.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-informational)](LICENSE)
+
 NainNotify is an event-driven notification gateway and worker engine built with .NET 10, Clean Architecture, and MassTransit. It decouples high-throughput HTTP ingestion from background processing, email rendering (responsive HTML with VML Outlook bulletproofing), and delivery provider execution, while streaming end-to-end domain lifecycle events directly to a reactive Vue 3 + TypeScript telemetry client via Server-Sent Events (SSE).
 
 ---
