@@ -1,10 +1,22 @@
-# NainNotify — Asynchronous Cloud Notification Gateway
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/banner-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="docs/assets/banner-light.svg">
+  <img src="docs/assets/banner-dark.svg" alt="NainNotify - Asynchronous Cloud Notification Gateway" width="100%">
+</picture>
+
+<div align="center">
 
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-notify.naindev.com-38bdf8?style=flat-square&logo=google-chrome&logoColor=white)](https://notify.naindev.com/)
-[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4)](https://dotnet.microsoft.com/)
-[![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D)](https://vuejs.org/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6)](https://www.typescriptlang.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-informational)](LICENSE)
+[![CodeQL](https://github.com/Nain9Dev/NainNotify/actions/workflows/codeql.yml/badge.svg)](https://github.com/Nain9Dev/NainNotify/actions/workflows/codeql.yml)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
+[![Architecture Tests](https://img.shields.io/badge/Architecture%20Tests-NetArchTest%20enforced-80FF00?style=flat-square&logo=checkmarx&logoColor=black)](tests/Notificaciones.UnitTests/Architecture/ArchitectureTests.cs)
+[![Open in GitHub Codespaces](https://img.shields.io/badge/Open%20in-Codespaces-1f2937?style=flat-square&logo=github&logoColor=white)](https://codespaces.new/Nain9Dev/NainNotify)
+[![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white)](https://vuejs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Tests Passing](https://img.shields.io/badge/Tests-81%20passing-80FF00?style=flat-square&logo=checkmarx&logoColor=black)](tests)
+[![License: MIT](https://img.shields.io/badge/License-MIT-informational?style=flat-square)](LICENSE)
+
+</div>
 
 NainNotify is an event-driven notification gateway and worker engine built with .NET 10, Clean Architecture, and MassTransit. It decouples high-throughput HTTP ingestion from background processing, email rendering (responsive HTML with VML Outlook bulletproofing), and delivery provider execution, while streaming end-to-end domain lifecycle events directly to a reactive Vue 3 + TypeScript telemetry client via Server-Sent Events (SSE).
 
@@ -12,42 +24,49 @@ NainNotify is an event-driven notification gateway and worker engine built with 
 
 ## Architecture Overview
 
-```
-                                      +------------------------------------+
-                                      |      Vue 3 + TypeScript Client     |
-                                      |      (Port 5378 / notify.naindev)  |
-                                      +-----------------+------------------+
-                                                        |
-                                          HTTP POST     |   Server-Sent Events (SSE)
-                                          (Ingestion)   |   (Real-time telemetry)
-                                                        v
-+-------------------------------------------------------------------------------------------------+
-| ASP.NET Core API Gateway (Port 8120)                                                            |
-|                                                                                                 |
-|   - Rate Limiting (Fixed window per IP)                                                         |
-|   - Honeypot Anti-Spam Gate (Silent drop on populated trap field)                              |
-|   - PrivacyMasker (Zero-PII leakage: masks email addresses before telemetry ingestion)          |
-|   - Sandbox Recipient Guard (Enforces internal test mailbox redirection for public demos)       |
-|   - OpenAPI 3.0 + Scalar Interactive Documentation (/docs)                                      |
-+-------------------------------------------------+-----------------------------------------------+
-                                                  |
-                                                  v  MassTransit Ingestion
-+-------------------------------------------------------------------------------------------------+
-| Event Bus Transport (Dual-Mode: In-Memory Bus or Distributed RabbitMQ Cluster)                  |
-|                                                                                                 |
-|   - NotificationEvent Exchange -> Worker Consumer Queue                                         |
-|   - NotificationLifecycleEvent Broadcast -> Telemetry Consumer & SSE Hub                        |
-+-------------------------------------------------+-----------------------------------------------+
-                                                  |
-                                                  v  Concurrent Processing
-+-------------------------------------------------------------------------------------------------+
-| Background Worker Engine                                                                        |
-|                                                                                                 |
-|   - Message Deserialization & Domain Event Validation                                           |
-|   - EmailTemplateEngine (VML-bulletproof HTML & RFC 2822 Plain Text generation)                 |
-|   - SMTP Relay Dispatcher & Delivery Simulation Adapter                                         |
-|   - Lifecycle Telemetry Publisher (Accepted -> Queued -> Received -> Rendered -> Dispatched)   |
-+-------------------------------------------------------------------------------------------------+
+```mermaid
+graph TB
+    subgraph ClientLayer["Frontend Client Layer"]
+        VueClient["Vue 3 + TypeScript Client<br/><code>Port 5378 / notify.naindev.com</code><br/><i>Glassmorphism Telemetry Console</i>"]
+    end
+
+    subgraph GatewayLayer["API Gateway Layer (:8120)"]
+        ApiGateway["ASP.NET Core API Gateway<br/><code>Rate Limiter &amp; Honeypot Anti-Spam</code>"]
+        PrivacyMasker["PrivacyMasker<br/><i>Zero-PII Masking at Edge</i>"]
+        SSEHub["SSE Hub &amp; Channels<br/><i>Real-time Telemetry Broadcast</i>"]
+    end
+
+    subgraph BusLayer["Messaging &amp; Event Bus Transport"]
+        MassTransit["MassTransit Bus<br/><i>Dual-Mode: In-Memory / RabbitMQ</i>"]
+        ExQueue[("NotificationEvent Exchange<br/>&amp; Lifecycle Streams")]
+    end
+
+    subgraph WorkerLayer["Worker Execution Engine"]
+        WorkerEngine["Background Worker Engine<br/><i>MassTransit Consumers</i>"]
+        TemplateEngine["EmailTemplateEngine<br/><i>VML-Bulletproof HTML &amp; RFC 2822</i>"]
+        SmtpRelay["SMTP Dispatcher &amp;<br/>Delivery Simulation Adapter"]
+    end
+
+    VueClient -->|"HTTP POST (Ingest)"| ApiGateway
+    ApiGateway --> PrivacyMasker
+    PrivacyMasker -->|"Publish Event"| MassTransit
+    MassTransit --> ExQueue
+    ExQueue -->|"Consume Batch"| WorkerEngine
+    WorkerEngine --> TemplateEngine
+    TemplateEngine --> SmtpRelay
+    WorkerEngine -->|"Lifecycle State Transitions<br/>(Accepted &rarr; Dispatched)"| MassTransit
+    MassTransit -->|"Push Lifecycle"| SSEHub
+    SSEHub -->|"Server-Sent Events (SSE &lt; 20ms)"| VueClient
+
+    classDef client fill:#0047AB,stroke:#38BDF8,stroke-width:2px,color:#FFFFFF;
+    classDef gateway fill:#002B66,stroke:#80FF00,stroke-width:2px,color:#FFFFFF;
+    classDef bus fill:#060D1A,stroke:#38BDF8,stroke-width:2px,color:#FFFFFF;
+    classDef worker fill:#0A1629,stroke:#94A3B8,stroke-width:2px,color:#FFFFFF;
+
+    class VueClient client;
+    class ApiGateway,PrivacyMasker,SSEHub gateway;
+    class MassTransit,ExQueue bus;
+    class WorkerEngine,TemplateEngine,SmtpRelay worker;
 ```
 
 ---

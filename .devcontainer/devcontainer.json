@@ -1,0 +1,27 @@
+{
+  "name": "NainNotify - .NET 10 & MassTransit",
+  "image": "mcr.microsoft.com/devcontainers/dotnet:1-10.0",
+  "features": {
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22"
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "editor.formatOnSave": true,
+        "[csharp]": {
+          "editor.defaultFormatter": "ms-dotnettools.csharp"
+        }
+      },
+      "extensions": [
+        "ms-dotnettools.csharp",
+        "ms-dotnettools.csdevkit",
+        "vue.volar"
+      ]
+    }
+  },
+  "forwardPorts": [8120, 5378],
+  "postCreateCommand": "dotnet restore && dotnet test MicroservicioNotificaciones.sln"
+}
