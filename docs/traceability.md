@@ -9,3 +9,4 @@
 | REQ-05 | Client IP partitioned rate limiting | Requirements | `Program.cs` RateLimiter policies | `RateLimiterIntegrationTests.cs` |
 | REQ-06 | Realtime SSE telemetry streaming | ADR-003 | `NotificationStreamBroadcaster`, `/api/v1/Notifications/stream` | `TelemetryStreamIntegrationTests.cs` |
 | REQ-07 | Reactive Vue 3 client & Playground | ADR-003 | `Notificaciones.Client/` (port 5378) | `vue-tsc -b` & Vite build |
+| REQ-NOTIF-06..12 | Guided studio layout, live preview, paced pipeline, grouped activity, standalone fallback, responsive and accessible | `specs/002-client-visual-redesign/spec.md` | `NotificationStudio.vue`, `PipelineFlow.vue`, `ActivityFeed.vue`, `services/api.ts` | `vue-tsc -b` & Vite build; manual browser pass at 375 / 768 / 1024 px (2026-10-22) |

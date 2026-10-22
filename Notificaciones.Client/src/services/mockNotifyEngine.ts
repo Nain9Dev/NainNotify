@@ -1,5 +1,6 @@
 import type {
   ContactFormRequest,
+  ContactFormResponse,
   DemoNotificationRequest,
   DemoNotificationResponse,
   HealthStatusResponse,
@@ -10,11 +11,18 @@ import type {
   TemplatePreviewResponse,
 } from '../types/contracts'
 import type { SseHandlers } from './api'
+import { maskEmail } from '../utils/format'
+
+/**
+ * Standalone engine used when no gateway is reachable (GitHub Pages or the API is down).
+ * Stages are paced so the pipeline is readable; reported latencies model the real gateway.
+ */
 
 const listeners = new Set<SseHandlers>()
+const bootedAt = Date.now()
 
 const snapshot: TelemetrySnapshot = {
-  uptimeSeconds: 18450,
+  uptimeSeconds: 0,
   accepted: 48,
   dispatched: 47,
   failed: 1,
@@ -38,72 +46,74 @@ const snapshot: TelemetrySnapshot = {
   lastEventAt: new Date().toISOString(),
 }
 
+function seedEvent(
+  id: string,
+  type: NotificationType,
+  priority: string,
+  recipient: string,
+  subject: string,
+  elapsed: number,
+  bytes: number,
+  channel: string,
+  minutesAgo: number
+): NotificationLifecycleEvent {
+  return {
+    notificationId: id,
+    stage: 'Dispatched',
+    type,
+    priority,
+    recipient: maskEmail(recipient),
+    subject,
+    source: 'Worker/MassTransit',
+    elapsedMilliseconds: elapsed,
+    payloadBytes: bytes,
+    attempt: 1,
+    channel,
+    detail: 'Entregado.',
+    error: null,
+    timestamp: new Date(Date.now() - minutesAgo * 60_000).toISOString(),
+  }
+}
+
 const recentEvents: NotificationLifecycleEvent[] = [
-  {
-    notificationId: 'notif-synth-001',
-    stage: 'Dispatched',
-    type: 'WelcomeMessage',
-    priority: 'Normal',
-    recipient: 'maria.garcia@example.es',
-    subject: 'Bienvenido a la plataforma de notificaciones',
-    source: 'Worker/MassTransit',
-    elapsedMilliseconds: 18,
-    payloadBytes: 3120,
-    attempt: 1,
-    channel: 'ResendSmtp',
-    detail: 'Mensaje entregado satisfactoriamente al relay SMTP en 18ms.',
-    error: null,
-    timestamp: new Date(Date.now() - 1000 * 60 * 3).toISOString(),
-  },
-  {
-    notificationId: 'notif-synth-002',
-    stage: 'Dispatched',
-    type: 'ContactFormSubmission',
-    priority: 'High',
-    recipient: 'aitor@naindev.com',
-    subject: 'Nueva propuesta de modernización técnica .NET',
-    source: 'Worker/MassTransit',
-    elapsedMilliseconds: 24,
-    payloadBytes: 4280,
-    attempt: 1,
-    channel: 'ResendSmtp',
-    detail: 'Lead cualificado procesado y reenviado a la bandeja corporativa.',
-    error: null,
-    timestamp: new Date(Date.now() - 1000 * 60 * 12).toISOString(),
-  },
-  {
-    notificationId: 'notif-synth-003',
-    stage: 'Dispatched',
-    type: 'SystemAlert',
-    priority: 'High',
-    recipient: 'ops@naindev.com',
-    subject: 'Alerta: Umbral de consumo de base de datos verificado',
-    source: 'Worker/MassTransit',
-    elapsedMilliseconds: 12,
-    payloadBytes: 1840,
-    attempt: 1,
-    channel: 'InAppPush',
-    detail: 'Alerta operacional distribuida con canal prioritario.',
-    error: null,
-    timestamp: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
-  },
+  seedEvent('a1f4c9e2', 'WelcomeMessage', 'Normal', 'maria.garcia@example.es', 'Bienvenida a la plataforma', 18, 3120, 'ResendSmtp', 3),
+  seedEvent('b7d02e41', 'ContactFormSubmission', 'High', 'aitor@naindev.com', 'Propuesta de modernización .NET', 24, 4280, 'ResendSmtp', 12),
+  seedEvent('c93e7a10', 'SystemAlert', 'High', 'ops@naindev.com', 'Umbral de base de datos alcanzado', 12, 1840, 'InAppPush', 25),
 ]
 
-function emitEvent(event: NotificationLifecycleEvent) {
+function snapshotCopy(): TelemetrySnapshot {
+  snapshot.uptimeSeconds = 18_450 + Math.floor((Date.now() - bootedAt) / 1000)
+  return JSON.parse(JSON.stringify(snapshot))
+}
+
+function emit(event: NotificationLifecycleEvent) {
   recentEvents.unshift(event)
-  if (recentEvents.length > 50) recentEvents.pop()
+  if (recentEvents.length > 60) recentEvents.pop()
   snapshot.lastEventAt = event.timestamp
+  const metrics = snapshotCopy()
   listeners.forEach((h) => {
     try {
       h.onLifecycle(event)
-      h.onMetrics(JSON.parse(JSON.stringify(snapshot)))
+      h.onMetrics(metrics)
     } catch (e) {
       console.warn('Listener error', e)
     }
   })
 }
 
-function processPipeline(
+const STAGE_PLAN: { stage: NotificationStage; at: number; latency: number; detail: string }[] = [
+  { stage: 'Accepted', at: 0, latency: 1.4, detail: 'Petición validada por el gateway.' },
+  { stage: 'Queued', at: 420, latency: 4.2, detail: 'Publicada en el bus de mensajes.' },
+  { stage: 'Received', at: 900, latency: 8.9, detail: 'Consumida por el worker.' },
+  { stage: 'Rendered', at: 1500, latency: 15.6, detail: 'Plantilla HTML renderizada.' },
+  { stage: 'Dispatched', at: 2100, latency: 22.3, detail: 'Entregada al canal de salida.' },
+]
+
+function jitter(base: number): number {
+  return Math.round((base + (Math.random() - 0.5) * base * 0.3) * 10) / 10
+}
+
+function runPipeline(
   id: string,
   type: NotificationType,
   recipient: string,
@@ -114,31 +124,31 @@ function processPipeline(
   snapshot.accepted++
   snapshot.inFlight++
   snapshot.byType[type] = (snapshot.byType[type] || 0) + 1
+  const masked = maskEmail(recipient)
+  const total = jitter(STAGE_PLAN[STAGE_PLAN.length - 1].latency)
 
-  const stages: { stage: NotificationStage; delay: number; detail: string }[] = [
-    { stage: 'Accepted', delay: 0, detail: 'Solicitud aceptada y firmada por el Gateway HTTP.' },
-    { stage: 'Queued', delay: 10, detail: 'Mensaje publicado en la cola de mensajería (In-Memory / RabbitMQ).' },
-    { stage: 'Received', delay: 22, detail: 'Consumidor MassTransit ha recibido y deserializado el payload.' },
-    { stage: 'Rendered', delay: 35, detail: 'Plantilla Razor HTML compilada con éxito.' },
-    { stage: 'Dispatched', delay: 48, detail: `Despacho completado con éxito a ${recipient} en tiempo récord.` },
-  ]
-
-  stages.forEach(({ stage, delay, detail }) => {
-    setTimeout(() => {
+  STAGE_PLAN.forEach(({ stage, at, latency, detail }, index) => {
+    window.setTimeout(() => {
+      const elapsed = index === STAGE_PLAN.length - 1 ? total : jitter(latency)
       if (stage === 'Dispatched') {
         snapshot.inFlight = Math.max(0, snapshot.inFlight - 1)
         snapshot.dispatched++
         snapshot.renderedBytes += bytes
+        snapshot.averageLatencyMs = Math.round(((snapshot.averageLatencyMs * (snapshot.dispatched - 1) + total) / snapshot.dispatched) * 10) / 10
+        snapshot.p95LatencyMs = Math.max(snapshot.p95LatencyMs, Math.round(total * 1.35 * 10) / 10)
+        snapshot.fastestLatencyMs = Math.min(snapshot.fastestLatencyMs, total)
+        snapshot.successRate = Math.round((snapshot.dispatched / snapshot.accepted) * 1000) / 10
+        snapshot.byChannel.ResendSmtp = (snapshot.byChannel.ResendSmtp || 0) + 1
       }
-      emitEvent({
+      emit({
         notificationId: id,
         stage,
         type,
         priority,
-        recipient,
+        recipient: masked,
         subject,
-        source: 'Worker/MassTransit',
-        elapsedMilliseconds: delay,
+        source: index === 0 ? 'Api/Gateway' : 'Worker/MassTransit',
+        elapsedMilliseconds: elapsed,
         payloadBytes: bytes,
         attempt: 1,
         channel: 'ResendSmtp',
@@ -146,35 +156,58 @@ function processPipeline(
         error: null,
         timestamp: new Date().toISOString(),
       })
-    }, delay)
+    }, at)
   })
+}
+
+function newId(): string {
+  return crypto.randomUUID().replace(/-/g, '').slice(0, 8)
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+}
+
+const TYPE_LABEL: Record<NotificationType, string> = {
+  SystemAlert: 'Alerta del sistema',
+  WelcomeMessage: 'Bienvenida',
+  ContactFormSubmission: 'Contacto',
+  TestDemo: 'Prueba',
+}
+
+const TYPE_COLOR: Record<NotificationType, string> = {
+  SystemAlert: '#f59e0b',
+  WelcomeMessage: '#38bdf8',
+  ContactFormSubmission: '#6366f1',
+  TestDemo: '#34d399',
 }
 
 export const mockNotifyEngine = {
   fetchHealth(): HealthStatusResponse {
     return {
-      service: 'NainNotify Microservice',
+      service: 'NainNotify',
       version: '2.0.0',
-      architecture: 'Hexagonal Architecture (In-Memory Bus)',
+      architecture: 'Clean Architecture (standalone engine)',
       status: 'Healthy',
-      transport: 'In-Memory Bus',
+      transport: 'in-memory',
       workerInProcess: true,
-      instanceId: 'nainnotify-standalone-cluster',
-      uptimeSeconds: snapshot.uptimeSeconds,
+      instanceId: 'standalone',
+      uptimeSeconds: snapshotCopy().uptimeSeconds,
       checkDurationMs: 2,
       dependencies: {
-        rabbitmq: { status: 'Healthy (In-Memory Engine)', durationMs: 1 },
-        smtp: { status: 'Healthy (Sandboxed)', durationMs: 1 },
+        bus: { status: 'Healthy', durationMs: 1 },
+        smtp: { status: 'Healthy', durationMs: 1 },
       },
       timestamp: new Date().toISOString(),
     }
   },
 
   fetchMetrics(): { snapshot: TelemetrySnapshot; listeners: number } {
-    return {
-      snapshot: JSON.parse(JSON.stringify(snapshot)),
-      listeners: listeners.size || 1,
-    }
+    return { snapshot: snapshotCopy(), listeners: listeners.size || 1 }
   },
 
   fetchActivity(): NotificationLifecycleEvent[] {
@@ -182,51 +215,59 @@ export const mockNotifyEngine = {
   },
 
   triggerDemo(req: DemoNotificationRequest): DemoNotificationResponse {
-    const id = `notif-${crypto.randomUUID().substring(0, 8)}`
+    const id = newId()
     const bytes = Math.max(1200, req.content.length * 8)
-    processPipeline(id, req.eventType, req.targetRecipient, req.subject, req.priority, bytes)
-
+    runPipeline(id, req.eventType, req.targetRecipient, req.subject, req.priority, bytes)
     return {
       status: 'Enqueued',
-      broker: 'In-Memory Bus',
+      broker: 'in-memory',
       assignedTrackingId: id,
       targetType: req.eventType,
-      effectiveRecipient: req.targetRecipient,
+      effectiveRecipient: maskEmail(req.targetRecipient),
       sandboxed: true,
-      sandboxNotice: 'Modo seguro demostrativo: Despacho completado en memoria sin coste ni dependencias externas.',
+      sandboxNotice: 'Demo local: nada sale de tu navegador.',
     }
   },
 
-  submitContact(req: ContactFormRequest): { status: string; message: string; trackingId: string; timestamp: string } {
-    const id = `contact-${crypto.randomUUID().substring(0, 8)}`
-    const bytes = 2400 + req.message.length * 4
-    processPipeline(id, 'ContactFormSubmission', req.senderEmail, req.subject, 'High', bytes)
-
-    return {
-      status: 'Enqueued',
-      message: 'Mensaje de contacto recibido y enrutado a la cola de despacho prioritario.',
-      trackingId: id,
-      timestamp: new Date().toISOString(),
+  submitContact(req: ContactFormRequest): ContactFormResponse {
+    const id = newId()
+    if (req.website && req.website.trim().length > 0) {
+      // Honeypot filled: the gateway answers 202 but drops the message silently.
+      return { status: 'Accepted', message: 'Recibido.', trackingId: id, timestamp: new Date().toISOString() }
     }
+    const bytes = 2400 + req.message.length * 4
+    runPipeline(id, 'ContactFormSubmission', req.senderEmail, req.subject, 'High', bytes)
+    return { status: 'Enqueued', message: 'Recibido.', trackingId: id, timestamp: new Date().toISOString() }
   },
 
   renderPreview(req: DemoNotificationRequest): TemplatePreviewResponse {
-    const html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0f172a; color: #f8fafc; border-radius: 8px; padding: 24px; border: 1px solid rgba(255,255,255,0.1);">
-  <div style="border-bottom: 1px solid #334155; padding-bottom: 16px; margin-bottom: 20px;">
-    <h2 style="color: #38bdf8; margin: 0 0 6px 0;">${req.subject}</h2>
-    <span style="font-size: 12px; color: #94a3b8;">Tipo: ${req.eventType} · Prioridad: ${req.priority}</span>
-  </div>
-  <div style="line-height: 1.6; color: #cbd5e1; font-size: 14px;">
-    ${req.content.replace(/\n/g, '<br>')}
-  </div>
-  <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #334155; font-size: 11px; color: #64748b;">
-    Despachado por NainNotify · Microservicio Hexagonal .NET 10 & MassTransit
-  </div>
-</div>`
+    const color = TYPE_COLOR[req.eventType] ?? '#38bdf8'
+    const subject = escapeHtml(req.subject || 'Sin asunto')
+    const body = escapeHtml(req.content || '').replace(/\n/g, '<br>')
+    const sender = escapeHtml(req.senderName || 'NainNotify')
+    const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"></head>
+<body style="margin:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f3f4f6;padding:24px 12px;">
+<tr><td align="center">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;">
+<tr><td style="height:6px;background:${color};"></td></tr>
+<tr><td style="padding:28px 32px 8px 32px;">
+<div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:${color};font-weight:700;">${TYPE_LABEL[req.eventType] ?? req.eventType}</div>
+<h1 style="margin:10px 0 0 0;font-size:22px;line-height:1.3;color:#111827;">${subject}</h1>
+</td></tr>
+<tr><td style="padding:12px 32px 28px 32px;font-size:15px;line-height:1.6;color:#374151;">${body}</td></tr>
+<tr><td style="padding:0 32px 28px 32px;">
+<a href="#" style="display:inline-block;background:${color};color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;padding:12px 20px;border-radius:8px;">Ver detalles</a>
+</td></tr>
+<tr><td style="padding:16px 32px;border-top:1px solid #e5e7eb;font-size:12px;color:#6b7280;">${sender} · Enviado con NainNotify</td></tr>
+</table>
+</td></tr>
+</table>
+</body></html>`
 
     return {
       html,
-      plainText: `${req.subject}\n\n${req.content}\n\n--\nNainNotify`,
+      plainText: `${req.subject}\n\n${req.content}\n\n--\n${req.senderName || 'NainNotify'}`,
       bytes: html.length,
       renderMilliseconds: 4,
       type: req.eventType,
@@ -235,13 +276,12 @@ export const mockNotifyEngine = {
 
   connectStream(handlers: SseHandlers): () => void {
     listeners.add(handlers)
-    handlers.onStatusChange('connected')
+    handlers.onStatusChange('standalone')
     handlers.onHydrate({
-      snapshot: JSON.parse(JSON.stringify(snapshot)),
+      snapshot: snapshotCopy(),
       recent: JSON.parse(JSON.stringify(recentEvents)),
       listeners: listeners.size,
     })
-
     return () => {
       listeners.delete(handlers)
     }

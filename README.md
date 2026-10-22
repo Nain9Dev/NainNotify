@@ -27,7 +27,7 @@ NainNotify is an event-driven notification gateway and worker engine built with 
 ```mermaid
 graph TB
     subgraph ClientLayer["Frontend Client Layer"]
-        VueClient["Vue 3 + TypeScript Client<br/><code>Port 5378 / notify.naindev.com</code><br/><i>Glassmorphism Telemetry Console</i>"]
+        VueClient["Vue 3 + TypeScript Client<br/><code>Port 5378 / notify.naindev.com</code><br/><i>Guided Studio &amp; Live Pipeline</i>"]
     end
 
     subgraph GatewayLayer["API Gateway Layer (:8120)"]
@@ -109,7 +109,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5378` to launch the reactive glassmorphism console.
+Open `http://localhost:5378` to launch the guided studio: pick a scenario, send it, watch it travel through the pipeline and see the rendered email. With the gateway stopped the client runs on its standalone in-browser engine (same experience as the GitHub Pages deployment).
 
 ### 3. Run with Distributed RabbitMQ (Docker)
 

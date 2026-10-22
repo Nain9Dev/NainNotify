@@ -95,6 +95,13 @@ export interface ContactFormRequest {
   website?: string
 }
 
+export interface ContactFormResponse {
+  status: string
+  message: string
+  trackingId: string
+  timestamp: string
+}
+
 export interface TemplatePreviewResponse {
   html: string
   plainText: string
