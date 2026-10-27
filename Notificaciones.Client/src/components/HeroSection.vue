@@ -1,37 +1,37 @@
 <script setup lang="ts">
+import { t } from '../locales/i18n'
 const REPO_URL = 'https://github.com/Nain9Dev/NainNotify'
 </script>
 
 <template>
   <section class="hero" id="top">
     <div class="container hero-inner">
-      <span class="section-kicker">Pasarela de notificaciones · .NET 10</span>
+      <span class="section-kicker">{{ t('kicker') }}</span>
 
       <h1 class="display hero-title">
-        Envía. Observa. <span class="gradient-text">Entrega.</span>
+        {{ t('heroTitleA') }} <span class="gradient-text">{{ t('heroTitleB') }}</span>
       </h1>
 
       <p class="hero-lede">
-        Notificaciones asíncronas con trazabilidad en tiempo real.
-        Pruébalo en diez segundos, sin registro.
+        {{ t('heroLede') }}
       </p>
 
       <div class="hero-actions">
         <a class="btn btn-primary btn-lg" href="#studio">
-          Probar ahora
+          {{ t('tryNow') }}
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
             <path d="M12 5v14M5 12l7 7 7-7" />
           </svg>
         </a>
         <a class="btn btn-secondary btn-lg" :href="REPO_URL" target="_blank" rel="noopener">
-          Ver el código
+          {{ t('viewCode') }}
         </a>
       </div>
 
-      <ol class="hero-steps" aria-label="Cómo funciona">
-        <li><span class="step-num">1</span> Elige un escenario</li>
-        <li><span class="step-num">2</span> Envíalo</li>
-        <li><span class="step-num">3</span> Míralo llegar</li>
+      <ol class="hero-steps" aria-label="Steps">
+        <li><span class="step-num">1</span> {{ t('step1') }}</li>
+        <li><span class="step-num">2</span> {{ t('step2') }}</li>
+        <li><span class="step-num">3</span> {{ t('step3') }}</li>
       </ol>
     </div>
   </section>

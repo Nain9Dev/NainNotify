@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '../locales/i18n'
 const REPO_URL = 'https://github.com/Nain9Dev/NainNotify'
 const year = new Date().getFullYear()
 </script>
@@ -6,11 +7,11 @@ const year = new Date().getFullYear()
 <template>
   <footer class="site-footer">
     <div class="container footer-row">
-      <span class="muted">© {{ year }} NainNotify · un producto de <a class="link" href="https://www.naindev.com" target="_blank" rel="noopener">NainDev</a></span>
+      <span class="muted">© {{ year }} NainNotify · {{ t('footerProduct') }} <a class="link" href="https://www.naindev.com" target="_blank" rel="noopener">NainDev</a></span>
       <nav class="footer-links" aria-label="Enlaces">
         <a class="link" :href="REPO_URL" target="_blank" rel="noopener">GitHub</a>
         <a class="link" :href="`${REPO_URL}/blob/main/LICENSE`" target="_blank" rel="noopener">MIT</a>
-        <a class="link" :href="`${REPO_URL}/blob/main/SECURITY.md`" target="_blank" rel="noopener">Seguridad</a>
+        <a class="link" :href="`${REPO_URL}/blob/main/SECURITY.md`" target="_blank" rel="noopener">{{ t('security') }}</a>
       </nav>
     </div>
   </footer>

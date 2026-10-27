@@ -1,101 +1,105 @@
-# Runbook
+# Runbook — NainNotify
 
-## Puerto asignado
+## Assigned Ports & Endpoints
 
-Este servicio ocupa el **8120** (banda de backends `8100-8199` del registro
-`D:\Development\PORTS.md`). El puerto está fijado en tres sitios y los tres deben coincidir:
+NainNotify is assigned port **8120** (within the `8100-8199` backend allocation defined in `PORTS.md`). The port is pinned across three configuration points that must remain synchronized:
 
-| Punto | Fichero | Valor |
+| Environment | Configuration File | Assigned Port / URL |
 | :--- | :--- | :--- |
-| Ejecución local | `src/Notificaciones.Api/Properties/launchSettings.json` | `http://localhost:8120` |
-| Contenedor | `Dockerfile` | `EXPOSE 8120`, `ASPNETCORE_URLS=http://+:8120` |
-| Publicación | `docker-compose.yml` | `"8120:8120"` |
+| **Local Debug** | `src/Notificaciones.Api/Properties/launchSettings.json` | `http://localhost:8120` |
+| **Container Image** | `Dockerfile` | `EXPOSE 8120`, `ASPNETCORE_URLS=http://+:8120` |
+| **Compose Service** | `docker-compose.yml` | `"8120:8120"` |
+| **Vue 3 Client** | `Notificaciones.Client/vite.config.ts` | Port `5378` (`strictPort: true`) |
 
-Kestrel **falla al arrancar** si el puerto está ocupado, no deriva a otro en silencio como
-hace Vite. Ese error es la señal buena: no lo esquives cambiando de puerto, averigua quién
-lo tiene ocupado.
+Kestrel is configured to fail fast on startup if port 8120 is claimed by another process. If port collisions occur:
 
 ```powershell
 netstat -ano | findstr :8120
 Get-Process -Id <pid>
 ```
 
-Puertos de infraestructura que este proyecto también reserva: **5672** (AMQP) y **15672**
-(panel de RabbitMQ). No los reasignes a otro proyecto.
+Related infrastructure ports reserved by this service:
+- **5672**: RabbitMQ AMQP broker
+- **15672**: RabbitMQ Management UI (`guest` / `guest`)
 
 ---
 
-## Arranque
+## Startup & Execution Modes
 
-### Opción A — Un solo proceso (in-memory)
+### Mode A: Standalone In-Memory (Zero External Dependencies)
 
 ```bash
 dotnet run --project src/Notificaciones.Api
 ```
 
-El perfil `Development` activa `RabbitMq:UseInMemoryTransport`, que sustituye RabbitMQ por el
-transporte en memoria de MassTransit y aloja el consumidor en el propio gateway. El pipeline
-completo funciona de extremo a extremo sin Docker ni broker.
+The default `Development` profile configures `RabbitMq:UseInMemoryTransport=true`, hosting MassTransit consumers in-process. The full asynchronous pipeline operates end-to-end without Docker or an external broker.
 
-- Consola: <http://localhost:8120>
-- OpenAPI: <http://localhost:8120/swagger>
+- Operations & Telemetry Console: <http://localhost:8120>
+- OpenAPI Documentation: <http://localhost:8120/swagger>
+- Client Development Server:
+  ```bash
+  cd Notificaciones.Client
+  npm run dev
+  ```
+  Accessible at <http://localhost:5378>.
 
-Para probar contra RabbitMQ real sin Docker, usa el segundo perfil:
+To run against a local RabbitMQ broker without Docker:
 
 ```bash
 dotnet run --project src/Notificaciones.Api --launch-profile "Notificaciones.Api (RabbitMQ)"
 ```
 
-> No habilites el transporte en memoria en un despliegue con varias instancias: los mensajes
-> nunca salen del proceso que los publicó.
+> **Warning**: Do not enable in-memory transport in multi-instance production environments; messages published in one instance are invisible to consumer workers in other processes.
 
-### Opción B — Clúster completo con Docker
+### Mode B: Clustered Deployment with Docker Compose
 
 ```bash
 docker-compose up -d --build
 ```
 
-Levanta tres contenedores: RabbitMQ, API Gateway y Worker. El clúster fija
-`RabbitMq__UseInMemoryTransport=false` por variable de entorno, así que usa el broker real
-aunque el perfil sea `Development`.
+Starts three containers: `rabbitmq`, `notificaciones-api`, and `notificaciones-worker`. The compose configuration injects `RabbitMq__UseInMemoryTransport=false`, forcing all instances onto the shared AMQP exchange.
 
-- Consola y OpenAPI: <http://localhost:8120>
-- Panel de RabbitMQ: <http://localhost:15672> (`guest` / `guest`)
-
-Logs del worker:
-
-```bash
-docker logs -f notificaciones-worker
-```
+- Live Dashboard & OpenAPI: <http://localhost:8120>
+- RabbitMQ Management: <http://localhost:15672>
+- Worker logs stream:
+  ```bash
+  docker logs -f notificaciones-worker
+  ```
 
 ---
 
-## Verificación
+## Verification & Health Probes
+
+### Run Automated Test Suite
 
 ```bash
 dotnet test MicroservicioNotificaciones.sln
 ```
 
-La suite de integración levanta la aplicación real sobre el transporte en memoria: cubre el
-pipeline de cinco etapas, el sandbox de destinatarios, el rate limiting, el honeypot y el
-servido de la consola. No necesita broker ni credenciales SMTP.
+The integration test suite boots the ASP.NET Core test server against the in-memory bus, covering the five-stage pipeline, recipient sandboxing, rate limiting, honeypot traps, and static file hosting. Zero network dependencies or SMTP credentials are required.
 
-Comprobación manual del estado de las dependencias:
+### Dependency Health Check
 
 ```bash
 curl http://localhost:8120/api/v1/notifications/health
 ```
 
+Expected response:
+
+```json
+{
+  "status": "Healthy",
+  "transport": "in-memory",
+  "bus": "Connected",
+  "timestamp": "2026-10-27T13:14:00Z"
+}
+```
+
 ---
 
-## Límites conocidos
+## Known Operational Boundaries
 
-- **La telemetría es volátil.** El read model vive en memoria y se reinicia con el proceso.
-  Alimenta una consola de operaciones, no un registro de auditoría.
-- **Cada instancia del gateway ve su propia proyección.** Con varias réplicas detrás de un
-  balanceador, cada una reporta lo que ha observado ella.
-- **Sin credenciales SMTP el envío se simula.** El canal se reporta como `simulation`, nunca
-  como una entrega real.
-- **Rate limiting por IP de socket.** Detrás de un proxy inverso hay que habilitar
-  `ForwardedHeaders:Enabled` declarando los proxies de confianza; si no, todos los visitantes
-  comparten la IP del proxy y agotan el límite entre todos.
+1. **In-Memory Telemetry Projection**: The real-time read model is maintained in volatile process memory and resets on service restart. It powers the live operations console and is not an immutable audit ledger.
+2. **Instance-Local Projections**: When scaling the API Gateway behind a reverse proxy, each gateway replica streams SSE events observed through its own subscription.
+3. **Simulated Dispatch Channel**: In the absence of validated SMTP relay credentials, the delivery adapter tags dispatched emails with channel `simulation` and records delivery without connecting to an external mail server.
+4. **Socket-Level Rate Limiting**: Behind a reverse proxy (e.g., NGINX, Cloudflare, Traefik), ensure `ForwardedHeaders:Enabled` is set with configured trusted proxies; otherwise, all clients will share the proxy IP and trigger rate limit exhaustion prematurely.

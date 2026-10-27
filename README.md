@@ -6,6 +6,8 @@
 
 <div align="center">
 
+[![Language: English](https://img.shields.io/badge/Language-English-blue?style=flat-square)](README.md)
+[![Versión en Español](https://img.shields.io/badge/Versi%C3%B3n-Espa%C3%B1ol-red?style=flat-square)](README.es.md)
 [![Live Demo](https://img.shields.io/badge/Live%20Demo-notify.naindev.com-38bdf8?style=flat-square&logo=google-chrome&logoColor=white)](https://notify.naindev.com/)
 [![CodeQL](https://github.com/Nain9Dev/NainNotify/actions/workflows/codeql.yml/badge.svg)](https://github.com/Nain9Dev/NainNotify/actions/workflows/codeql.yml)
 [![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square&logo=dotnet&logoColor=white)](https://dotnet.microsoft.com/)
