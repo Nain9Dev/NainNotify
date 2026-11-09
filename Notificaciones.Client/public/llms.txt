@@ -1,0 +1,9 @@
+# NainNotify
+
+> Asynchronous notification gateway with real-time delivery tracing, built on .NET, MassTransit and RabbitMQ, with an interactive demo client.
+
+## Links
+
+- [Live demo](https://notify.naindev.com/): the interactive studio
+- [Source code](https://github.com/Nain9Dev/NainNotify): repository, architecture notes and documentation
+- [Author site](https://www.naindev.com/): Aitor Nain Mendoza Vallejo (NainDev)

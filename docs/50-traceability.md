@@ -16,3 +16,4 @@ This matrix maps all functional and architectural requirements to their implemen
 | **REQ-NOTIF-010** | Reactive telemetry studio & scenario playground | ADR-003 | `NotificationStudio.vue`, `PipelineFlow.vue` | `vue-tsc -b` & Vite build | Verified |
 | **REQ-NOTIF-011** | Standalone demo mode resilience | ADR-003 | `useNotifyStream.ts`, `services/api.ts` | `vue-tsc -b` & Vite build | Verified |
 | **REQ-NOTIF-012** | Bilingual i18n & ecosystem event sync | Governance | `locales/i18n.ts`, `SiteHeader.vue` | `vue-tsc -b` & Vite build | Verified |
+| **REQ-NOTIF-013** | Search & AI-engine discoverability | specs/next-seo-discoverability | `Notificaciones.Client/index.html`, `Notificaciones.Client/public/{robots.txt,sitemap.xml,llms.txt}` | `SeoDiscoverabilityTests.cs` | Verified |
