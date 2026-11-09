@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file following Keep a Changelog and Semantic Versioning.
 
+## [Unreleased]
+### Added
+- Search and AI-engine discoverability (`specs/next-seo-discoverability/`): canonical URL, Open Graph, Twitter card and `SoftwareApplication` JSON-LD in the client page, plus `robots.txt`, `sitemap.xml` and `llms.txt` in `Notificaciones.Client/public/`.
+
+### Changed
+- Page description extended to name the stack (.NET, MassTransit, RabbitMQ).
+
 ## [1.1.0] - 2026-10-22
 ### Changed
 - Client redesigned as a guided studio: short hero with one call to action, animated pipeline with a compact KPI strip, one-click scenarios, live email preview and an activity feed grouped per notification (`specs/002-client-visual-redesign/`).

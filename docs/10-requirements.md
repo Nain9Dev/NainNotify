@@ -62,3 +62,7 @@ This document specifies the functional and non-functional requirements for the N
 ### REQ-NOTIF-012: Internationalization & Ecosystem Alignment
 - **Type**: Ubiquitous / Accessibility
 - **Statement**: The frontend client shall provide bilingual Spanish/English localization with reactive language toggling (`[ES | EN]`), synchronize with the `nain:locale-change` custom event from `<nain-ecosystem-bar>`, and meet WCAG 2.2 Level AA accessibility standards.
+
+### REQ-NOTIF-013: Search & AI-engine discoverability
+- **Type**: Ubiquitous
+- **Statement**: The public page shall declare one canonical URL, a 70 to 160 character description, Open Graph and Twitter card metadata and `SoftwareApplication` JSON-LD naming its author, and the deployed site shall serve `robots.txt` (advertising the sitemap), `sitemap.xml` and `llms.txt` from its root.
