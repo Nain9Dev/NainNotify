@@ -66,3 +66,7 @@ This document specifies the functional and non-functional requirements for the N
 ### REQ-NOTIF-013: Search & AI-engine discoverability
 - **Type**: Ubiquitous
 - **Statement**: The public page shall declare one canonical URL, a 70 to 160 character description, Open Graph and Twitter card metadata and `SoftwareApplication` JSON-LD naming its author, and the deployed site shall serve `robots.txt` (advertising the sitemap), `sitemap.xml` and `llms.txt` from its root.
+
+### REQ-NOTIF-014: Installable on Android and iOS
+- **Type**: Ubiquitous
+- **Statement**: The public page shall link a web app manifest (`display` `standalone`, `name` and `short_name` `NainNotify`, 192 px and 512 px `any` icons and a 512 px `maskable` icon) and the iOS home-screen tags (`apple-touch-icon`, `apple-mobile-web-app-title`, `mobile-web-app-capable`, `apple-mobile-web-app-capable`, status bar style `black`), and the deployed site shall serve the manifest and the icons from its root. The site registers no service worker.
