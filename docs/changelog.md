@@ -4,6 +4,7 @@ All notable changes to this project are documented in this file following Keep a
 
 ## [Unreleased]
 ### Added
+- Installable site (`specs/next-pwa-install/`): web app manifest, install icons (`any`, `maskable`, Apple touch) and iOS home-screen tags, so the site installs from Android Chrome and iOS Safari. No service worker.
 - Search and AI-engine discoverability (`specs/next-seo-discoverability/`): canonical URL, Open Graph, Twitter card and `SoftwareApplication` JSON-LD in the client page, plus `robots.txt`, `sitemap.xml` and `llms.txt` in `Notificaciones.Client/public/`.
 
 ### Changed
